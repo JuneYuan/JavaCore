@@ -1,15 +1,17 @@
-package synch;
+package unsynch;
 
-import java.util.concurrent.locks.*;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * A bank with a number of bank accounts that uses locks for serializing access.
- * @version 1.30 2004-08-01
- * @author Cay Horstmann
+ * 银行：包含若干账户
+ * A bank with a number of bank accounts.
  */
 public class Bank
 {
    private final double[] accounts;
+   // 增加锁对象和条件对象
    private Lock bankLock;
    private Condition sufficientFunds;
 
@@ -28,30 +30,33 @@ public class Bank
    }
 
    /**
+    * 执行转账操作，并打印明细和余额
     * Transfers money from one account to another.
     * @param from the account to transfer from
     * @param to the account to transfer to
     * @param amount the amount to transfer
+    * @throws InterruptedException 
     */
-   public void transfer(int from, int to, double amount) throws InterruptedException
-   {
-      bankLock.lock();
-      try
-      {
-         while (accounts[from] < amount)
-            sufficientFunds.await();
-         System.out.print(Thread.currentThread());
-         accounts[from] -= amount;
-         System.out.printf(" %10.2f from %d to %d", amount, from, to);
-         accounts[to] += amount;
-         System.out.printf(" Total Balance: %10.2f%n", getTotalBalance());
-         sufficientFunds.signalAll();
-      }
-      finally
-      {
-         bankLock.unlock();
-      }
-   }
+	public void transfer(int from, int to, double amount) throws InterruptedException {
+		bankLock.lock();  // 进入临界区
+		try {
+			while (accounts[from] < amount)  // 条件不满足时等待条件锁
+				sufficientFunds.await();	 // 将当前线程放到条件的等待集中
+				
+			System.out.print(Thread.currentThread());
+			accounts[from] -= amount;
+			System.out.printf(" %10.2f from %d to %d", amount, from, to);
+			accounts[to] += amount;
+			System.out.printf(" Total Balance: %10.2f%n", getTotalBalance());
+			
+			sufficientFunds.signalAll();	 // 解除此条件等待集中所有线程的阻塞状态
+		} finally {
+			bankLock.unlock();
+		}
+/*		if (accounts[from] < amount)
+			return;*/
+
+	}
 
    /**
     * Gets the sum of all account balances.
@@ -59,20 +64,12 @@ public class Bank
     */
    public double getTotalBalance()
    {
-      bankLock.lock();
-      try
-      {
-         double sum = 0;
+      double sum = 0;
 
-         for (double a : accounts)
-            sum += a;
+      for (double a : accounts)
+         sum += a;
 
-         return sum;
-      }
-      finally
-      {
-         bankLock.unlock();
-      }
+      return sum;
    }
 
    /**
